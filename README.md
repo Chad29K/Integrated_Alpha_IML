@@ -102,3 +102,4 @@ contains the full tracked universe, the project will read from it automatically.
 - The main evaluation target is future 20-day return ranking, not exact price matching.
 - The single-stock price demo is included only to make one part of the model output easier to interpret.
 - The RL search space is deliberately small, so the method is easy to inspect and rerun in a coursework setting.
+Note: large local datasets and generated outputs are not included in this repository.
