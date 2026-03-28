@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Alpha Stock</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Alpha Stock</p>
+          <h1>20-Day Stock Recommendation Dashboard</h1>
+          <p class="hero-copy">
+            RL mines interpretable ranking factors, LSTM forecasts future 20-day return,
+            and the optional chat tool answers questions about the current results.
+          </p>
+        </div>
+        <form method="post" action="{{ url_for('refresh') }}">
+          <button class="ghost-button" type="submit">Refresh Recommendations</button>
+        </form>
+      </header>
+
+      <section class="metric-grid">
+        <article class="metric-card">
+          <span class="metric-label">Latest trade date</span>
+          <strong>{{ summary.latest_trade_date }}</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">RL formula</span>
+          <strong>{{ summary.rl_formula }}</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Candidate universe</span>
+          <strong>{{ summary.candidate_count }} stocks</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">LSTM daily Rank IC</span>
+          <strong>{{ "%.4f"|format(summary.lstm_mean_daily_rank_ic) }}</strong>
+        </article>
+      </section>
+
+      <div class="main-grid">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Top 10 Picks</h2>
+            <p>Click any stock to see the recommendation reason, signals, and fit charts.</p>
+          </div>
+          <div class="stock-grid">
+            {% for row in recommendations %}
+            <a class="stock-card" href="{{ url_for('stock_detail', stock_code=row.ts_code) }}">
+              <div class="rank-badge">#{{ row.recommendation_rank }}</div>
+              <h3>{{ row.ts_code }}</h3>
+              <p class="stock-metric">Predicted 20-day return: {{ "{:.2%}".format(row.predicted_future_return_20d) }}</p>
+              <p class="stock-metric">RL factor value: {{ "{:.4f}".format(row.factor_value) }}</p>
+              <p class="stock-metric">Combined score: {{ "{:.3f}".format(row.combined_score) }}</p>
+            </a>
+            {% endfor %}
+          </div>
+        </section>
+
+        <aside class="panel chat-panel">
+          <div class="panel-header">
+            <h2>Project Chat</h2>
+            <p>Ask for interpretation, report wording, or a short critique of the current results.</p>
+          </div>
+          <div id="chat-log" class="chat-log">
+            <div class="chat-bubble assistant">
+              The chat tool can use the current market summary and the top 10 recommendations.
+            </div>
+          </div>
+          <form id="chat-form" class="chat-form">
+            <textarea id="chat-input" rows="4" placeholder="Ask about the current top 10 stocks..."></textarea>
+            <button type="submit">Send</button>
+          </form>
+          <div id="chat-error" class="chat-error"></div>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const chatForm = document.getElementById("chat-form");
+      const chatInput = document.getElementById("chat-input");
+      const chatLog = document.getElementById("chat-log");
+      const chatError = document.getElementById("chat-error");
+
+      function appendMessage(role, content) {
+        const bubble = document.createElement("div");
+        bubble.className = `chat-bubble ${role}`;
+        bubble.textContent = content;
+        chatLog.appendChild(bubble);
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      chatForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const question = chatInput.value.trim();
+        if (!question) {
+          return;
+        }
+
+        appendMessage("user", question);
+        chatInput.value = "";
+        chatError.textContent = "";
+
+        const response = await fetch("{{ url_for('api_chat') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question })
+        });
+        const payload = await response.json();
+        if (!payload.ok) {
+          chatError.textContent = payload.error;
+          return;
+        }
+        appendMessage("assistant", payload.answer);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Alpha Stock | {{ detail.stock_code }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  </head>
+  <body>
+    <div class="page-shell detail-shell">
+      <header class="hero detail-hero">
+        <div>
+          <p class="eyebrow">Alpha Stock</p>
+          <h1>{{ detail.stock_code }}</h1>
+          <p class="hero-copy">
+            Rank #{{ detail.recommendation_rank }} with a predicted 20-day return of
+            {{ "{:.2%}".format(detail.predicted_future_return_20d) }}.
+          </p>
+        </div>
+        <a class="ghost-button" href="{{ url_for('home') }}">Back to Dashboard</a>
+      </header>
+
+      <section class="metric-grid">
+        <article class="metric-card">
+          <span class="metric-label">RL formula</span>
+          <strong>{{ detail.formula }}</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">RL factor value</span>
+          <strong>{{ "{:.4f}".format(detail.factor_value) }}</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Predicted 20-day return</span>
+          <strong>{{ "{:.2%}".format(detail.predicted_future_return_20d) }}</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Fit points</span>
+          <strong>{{ detail.fit_metrics.get("points", 0) }}</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Price demo MAPE</span>
+          <strong>{{ "{:.2f}%".format(price_demo_summary.mape_percent) }}</strong>
+        </article>
+      </section>
+
+      <div class="detail-grid">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Recommendation Reasons</h2>
+            <p>These are the main drivers behind the stock being selected.</p>
+          </div>
+          <div class="reason-list">
+            {% for reason in detail.reasons %}
+            <article class="reason-card">
+              <h3>{{ reason.title }}</h3>
+              <p>{{ reason.body }}</p>
+            </article>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Signal Snapshot</h2>
+            <p>Latest input values used by the models.</p>
+          </div>
+          <table class="signal-table">
+            <tbody>
+              {% for label, value in detail.signal_snapshot.items() %}
+              <tr>
+                <th>{{ label }}</th>
+                <td>{{ "%.4f"|format(value) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <div class="detail-grid">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Single-Stock Price Fit</h2>
+            <p>
+              This chart shows a separate next-price example for the selected stock.
+              It is included as an intuitive visual reference and is not the main coursework target.
+            </p>
+          </div>
+          <img class="chart-image" src="data:image/png;base64,{{ price_fit_chart }}" alt="Single-stock price fit">
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Alpha Fit: Future 20-Day Return</h2>
+            <p>
+              This is the actual alpha task used in the recommendation engine. Because future returns
+              are much noisier than prices, the two lines are not expected to overlap tightly.
+            </p>
+          </div>
+          {% if alpha_fit_chart %}
+          <img class="chart-image" src="data:image/png;base64,{{ alpha_fit_chart }}" alt="Historical alpha fit">
+          {% else %}
+          <p class="empty-state">No historical fit points are available for this stock.</p>
+          {% endif %}
+        </section>
+      </div>
+
+      <aside class="panel chat-panel stock-chat">
+        <div class="panel-header">
+          <h2>Ask About {{ detail.stock_code }}</h2>
+          <p>The chat tool will receive the current stock context before answering.</p>
+        </div>
+        <div id="chat-log" class="chat-log">
+          <div class="chat-bubble assistant">
+            Ask for an explanation, a report paragraph, or a risk summary for this stock.
+          </div>
+        </div>
+        <form id="chat-form" class="chat-form">
+          <textarea id="chat-input" rows="4" placeholder="Why was this stock selected?"></textarea>
+          <button type="submit">Send</button>
+        </form>
+        <div id="chat-error" class="chat-error"></div>
+      </aside>
+    </div>
+
+    <script>
+      const stockCode = "{{ detail.stock_code }}";
+      const chatForm = document.getElementById("chat-form");
+      const chatInput = document.getElementById("chat-input");
+      const chatLog = document.getElementById("chat-log");
+      const chatError = document.getElementById("chat-error");
+
+      function appendMessage(role, content) {
+        const bubble = document.createElement("div");
+        bubble.className = `chat-bubble ${role}`;
+        bubble.textContent = content;
+        chatLog.appendChild(bubble);
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      chatForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const question = chatInput.value.trim();
+        if (!question) {
+          return;
+        }
+
+        appendMessage("user", question);
+        chatInput.value = "";
+        chatError.textContent = "";
+
+        const response = await fetch("{{ url_for('api_chat') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question, stock_code: stockCode })
+        });
+        const payload = await response.json();
+        if (!payload.ok) {
+          chatError.textContent = payload.error;
+          return;
+        }
+        appendMessage("assistant", payload.answer);
+      });
+    </script>
+  </body>
+</html>
